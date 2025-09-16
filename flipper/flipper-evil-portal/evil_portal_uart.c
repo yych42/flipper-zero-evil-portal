@@ -51,16 +51,19 @@ static int32_t uart_worker(void *context) {
         if (uart->handle_rx_data_cb) {
           uart->handle_rx_data_cb(uart->rx_buf, len, uart->app);
 
-          if (uart->app->has_command_queue) {
-            if (uart->app->command_index < 1) {
-              if (0 ==
-                  strncmp(SET_AP_CMD,
-                          uart->app->command_queue[uart->app->command_index],
-                          strlen(SET_AP_CMD))) {
+          if (uart->app->has_command_queue &&
+              uart->app->command_index < uart->app->command_queue_length) {
+            const char *queued_command =
+                uart->app->command_queue[uart->app->command_index];
+
+            if (queued_command) {
+              if (0 == strncmp(SET_AP_CMD, queued_command, strlen(SET_AP_CMD))) {
                 FuriString *out_data = furi_string_alloc();
 
                 furi_string_cat(out_data, "setap=");
-                furi_string_cat(out_data, (char *)uart->app->ap_name);
+                const char *ap_name =
+                    uart->app->ap_name ? (char *)uart->app->ap_name : "";
+                furi_string_cat(out_data, ap_name);
 
                 evil_portal_uart_tx((uint8_t *)(furi_string_get_cstr(out_data)),
                                     strlen(furi_string_get_cstr(out_data)));
@@ -68,13 +71,37 @@ static int32_t uart_worker(void *context) {
 
                 uart->app->sent_ap = true;
 
-                free(out_data);
+                furi_string_free(out_data);
                 free(uart->app->ap_name);
-              }
+                uart->app->ap_name = NULL;
+              } else if (0 == strncmp(SET_FAILED_CMD, queued_command,
+                                       strlen(SET_FAILED_CMD))) {
+                if (uart->app->failed_html) {
+                  FuriString *out_data = furi_string_alloc();
 
+                  furi_string_cat(out_data, "setfailed=");
+                  furi_string_cat(out_data, (char *)uart->app->failed_html);
+
+                  evil_portal_uart_tx((uint8_t *)(furi_string_get_cstr(out_data)),
+                                      strlen(furi_string_get_cstr(out_data)));
+                  evil_portal_uart_tx((uint8_t *)("\n"), 1);
+
+                  furi_string_free(out_data);
+                  free(uart->app->failed_html);
+                  uart->app->failed_html = NULL;
+                  uart->app->has_failed_html = false;
+                }
+              }
+            }
+
+            uart->app->command_index++;
+            if (uart->app->command_index >= uart->app->command_queue_length) {
               uart->app->command_index = 0;
               uart->app->has_command_queue = false;
-              uart->app->command_queue[0] = "";
+              uart->app->command_queue_length = 0;
+              for (size_t i = 0; i < COMMAND_QUEUE_SIZE; ++i) {
+                uart->app->command_queue[i] = NULL;
+              }
             }
           }
 

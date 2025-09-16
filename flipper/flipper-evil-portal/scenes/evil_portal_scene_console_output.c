@@ -67,9 +67,12 @@ void evil_portal_scene_console_output_on_enter(void *context) {
 
     if (0 ==
         strncmp(SET_HTML_CMD, app->selected_tx_string, strlen(SET_HTML_CMD))) {
-      app->command_queue[0] = SET_AP_CMD;
-      app->has_command_queue = true;
       app->command_index = 0;
+      app->command_queue_length = 0;
+      app->has_command_queue = false;
+      for (size_t i = 0; i < COMMAND_QUEUE_SIZE; ++i) {
+        app->command_queue[i] = NULL;
+      }
       if (app->show_stopscan_tip) {
         const char *msg =
             "Starting portal\nIf no response press\nBACK to return\n";
@@ -103,10 +106,25 @@ void evil_portal_scene_console_output_on_enter(void *context) {
     if (0 ==
         strncmp(SET_HTML_CMD, app->selected_tx_string, strlen(SET_HTML_CMD))) {
       evil_portal_read_index_html(context);
+      evil_portal_read_failed_html(context);
+      evil_portal_read_ap_name(context);
+
+      app->command_queue_length = 0;
+      if (app->has_failed_html && app->failed_html) {
+        app->command_queue[app->command_queue_length++] = SET_FAILED_CMD;
+      }
+      app->command_queue[app->command_queue_length++] = SET_AP_CMD;
+      for (size_t i = app->command_queue_length; i < COMMAND_QUEUE_SIZE; ++i) {
+        app->command_queue[i] = NULL;
+      }
+      app->has_command_queue = (app->command_queue_length > 0);
+      app->command_index = 0;
 
       FuriString *data = furi_string_alloc();
       furi_string_cat(data, "sethtml=");
-      furi_string_cat(data, (char *)app->index_html);
+      const char *index_html =
+          app->index_html ? (char *)app->index_html : "";
+      furi_string_cat(data, index_html);
 
       evil_portal_uart_tx((uint8_t *)(furi_string_get_cstr(data)),
                           strlen(furi_string_get_cstr(data)));
@@ -114,10 +132,9 @@ void evil_portal_scene_console_output_on_enter(void *context) {
 
       app->sent_html = true;
 
-      free(data);
+      furi_string_free(data);
       free(app->index_html);
-
-      evil_portal_read_ap_name(context);
+      app->index_html = NULL;
     } else if (0 ==
                strncmp(RESET_CMD, app->selected_tx_string, strlen(RESET_CMD))) {
       app->sent_html = false;
