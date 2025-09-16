@@ -29,9 +29,18 @@ Evil_PortalApp *evil_portal_app_alloc() {
   app->sent_html = false;
   app->sent_ap = false;
   app->sent_reset = false;
-  app->has_command_queue = false;  
+  app->has_command_queue = false;
   app->command_index = 0;
+  app->command_queue_length = 0;
+  app->failed_html = NULL;
+  app->has_failed_html = false;
+  app->index_html = NULL;
+  app->ap_name = NULL;
   app->portal_logs = furi_string_alloc();
+
+  for (size_t i = 0; i < COMMAND_QUEUE_SIZE; ++i) {
+    app->command_queue[i] = NULL;
+  }
 
   app->gui = furi_record_open(RECORD_GUI);
 
@@ -70,12 +79,27 @@ Evil_PortalApp *evil_portal_app_alloc() {
   return app;
 }
 
-void evil_portal_app_free(Evil_PortalApp *app) {  
+void evil_portal_app_free(Evil_PortalApp *app) {
 
   // save latest logs
   if (furi_string_utf8_length(app->portal_logs) > 0) {
     write_logs(app->portal_logs);
-    furi_string_free(app->portal_logs);
+  }
+  furi_string_free(app->portal_logs);
+
+  if (app->failed_html) {
+    free(app->failed_html);
+    app->failed_html = NULL;
+  }
+
+  if (app->index_html) {
+    free(app->index_html);
+    app->index_html = NULL;
+  }
+
+  if (app->ap_name) {
+    free(app->ap_name);
+    app->ap_name = NULL;
   }
 
   // Send reset event to dev board

@@ -10,13 +10,17 @@
 #include <gui/modules/variable_item_list.h>
 #include <gui/scene_manager.h>
 #include <gui/view_dispatcher.h>
+#include <furi.h>
+#include <furi_hal.h>
 
 #define NUM_MENU_ITEMS (4)
+#define COMMAND_QUEUE_SIZE (2)
 
 #define EVIL_PORTAL_TEXT_BOX_STORE_SIZE (4096)
 #define UART_CH (FuriHalUartIdUSART1)
 
 #define SET_HTML_CMD "sethtml"
+#define SET_FAILED_CMD "setfailed"
 #define SET_AP_CMD "setap"
 #define RESET_CMD "reset"
 
@@ -26,8 +30,9 @@ struct Evil_PortalApp {
   SceneManager *scene_manager;
 
   FuriString* portal_logs;
-  const char *command_queue[1];
+  const char *command_queue[COMMAND_QUEUE_SIZE];
   int command_index;
+  size_t command_queue_length;
   bool has_command_queue;
 
   FuriString *text_box_store;
@@ -51,6 +56,8 @@ struct Evil_PortalApp {
 
   uint8_t *index_html;
   uint8_t *ap_name;
+  uint8_t *failed_html;
+  bool has_failed_html;
 };
 
 typedef enum {
